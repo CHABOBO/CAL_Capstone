@@ -1,1 +1,34 @@
 
+Project Goal 
+
+Predict readmission and mortality of patients who have contracted sepsis. 
+
+Major Milestones
+Cleanse, transform, code and encrypt sample dataset 
+Need to ensure that dataset has no visible PII or PHI
+Need to determine what will need to be coded and store codes in private location
+Build out architecture for data storage and data manipulation
+What will we use for storage?
+Do we need multiple systems?
+Cost and access?
+Apply prior code (1) to full dataset and apply any additional encryptions
+Huge dataset, will need ‘big data’ languages and tools
+Begin developing the algorithm and features
+Remember the factors (features to a degree) that determine readmission or lack of readmission are what we are after
+Repeat 1-4
+Storyline and presentation
+How will we present this to the public?
+Who will our audience be?
+
+Note: For this project to succeed we will need a certain number of deaths, readmissions and septic patients. If this does not exist, possibly go back to phil’s original research question, but spin it to predictive - What factors predict that an inpatient will contract sepsis?
+
+Idea 1: Problem Clarity (5): Sepsis is a leader in death and high cost to patients, hospitals and insurers. With an increase in deaths and costs due to sepsis documented in 2000 and continuing to present day small research studies conducted and ideal protocol changes to inpatient treatment have been published, but the mortality rate and costs are still increasing. While sepsis can form outside of the treatment center or hospital, multiple cases, especially of individuals older than 65, have been documented of inpatients developing sepsis. We have received a massive dataset from a professor at the University of Chicago and with a wealth of variables related to patients who have:
+Become septic while inpatient
+Have a long-term, non-chronic condition (asthma, allergies, inflammatory disease)
+Have been admitted to the Chicago hospital system throughout 2006 to present day
+
+We will now ask, after reviewing available datasets and scoping out the what is feasible for the capstone, how can we predict readmission of a patient who has experienced sepsis and predict mortality? Solving this problem would aid the public, the medical community, hospitals, and insurers. 
+
+Idea 1: Problem Impact (5): Risk analysis, hospital systems and healthcare companies are looking into ways to decrease deaths and costs. With a focused effort on readmission and risk of death for patients who have developed sepsis this project would be be niche, but also extremely beneficial to the public. While others may be working on prevention the scope of their projects, from what I can find, have been much larger. Creating a predictive algorithm and publishing the code for the algorithm would benefit more than just the medical community, it could also benefit any data science team trying to develop something similar.
+
+Idea 1: Problem Feasibility(4): For the proposed capstone project we would create a predictive algorithm using prior data collected on inpatients, public datasets on seasonality and 2 or 3 public datasets related to readmission and mortality. All datasets exist at this moment, but will need to be reviewed more fully and one dataset will need to be heavily encrypted and feature engineered. The project would need a database to store over 45GB of data, knowledge of clinical data and aggregate datasets, understanding of the procedures and flow of inpatient treatment, mortality rates, and readmission, statistical and machine learning capabilities for creating the predictive algorithm, and experience creating an interactive gui/app for users. At the moment we think SPARK, HADOOP and MMLIB may be the best avenue for reviewing and feature engineering the data, but are open to other suggestions also.
