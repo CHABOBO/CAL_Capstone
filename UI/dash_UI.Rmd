@@ -1,0 +1,494 @@
+---
+title: "Sepsis Readmission Dashboard"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dplyr)
+library(shiny)
+library(ggplot2)
+library(RColorBrewer)
+library(data.table)
+library(xgboost)
+library(readr)
+library(stringr)
+library(Matrix)
+
+# Load in dataset for LR 
+data.sepsis = read.csv("https://www.dropbox.com/s/0ffl2f7lp92ovr6/final_LR_set.csv?raw=1")
+data.sepsis$minmap_notcalc = as.integer(data.sepsis$minmap_notcalc)
+
+# Load in data for xgboost
+
+
+```
+
+```{r, include = FALSE}
+
+## Probability plot discrete LR features 
+
+prob_plot_dis <- function(Feat) {
+  df3 <- cbind(data.frame(data.sepsis[["X1m_read"]]), data.frame(data.sepsis[[Feat]]))
+  colnames(df3) <- c("X1m_read", "Feat")
+  
+  plot_data <- df3 %>%
+  count(X1m_read, Feat) %>%
+  group_by(Feat) %>%
+  mutate(percent = n/sum(n))
+  
+  a <- ggplot(plot_data, aes(x = Feat, y = percent, fill = factor(X1m_read, labels = c("Not Readmitted", "Readmitted")))) +
+    geom_bar(stat='identity') +
+    labs (x = "Feature Value", y = "Probability", title = "Feature vs Probability of Readmission") +
+    theme(text = element_text(size = 10), legend.title = element_blank(), plot.title = element_text(size = 14),
+          axis.title.x = element_text(size = 10), axis.title.y = element_text(size = 10), legend.position = "bottom") +
+    scale_fill_brewer(palette = "Paired")
+  return(a)
+}
+
+### Probability plots for continuous features
+
+prob_plot_cont <- function(Feat) {
+  df3 <- cbind(data.frame(data.sepsis[["X1m_read"]]), data.frame(data.sepsis[[Feat]]))
+  colnames(df3) <- c("X1m_read", "Feat")  
+  
+  a <- ggplot(df3, aes (x=Feat, y=X1m_read)) + geom_point(size=2, alpha=0.4) +
+  stat_smooth(method="glm", method.args=list(family="binomial"), color = "blue", size=1.5) +
+  labs (x = "Feature Value", y = "Probability", title = "Feature vs Proability of Readmission") +
+  theme(text = element_text(size = 10), legend.title = element_blank(), plot.title = element_text(size = 14),
+        axis.title.x = element_text(size = 10), axis.title.y = element_text(size = 10))
+  
+  return(a) 
+  
+}
+
+
+##histogram plots for LR features
+
+hist_plot <- function(Feat, min_hist, max_hist, by_val) {  
+  df3 <- cbind(data.frame(data.sepsis[["X1m_read"]]), data.frame(data.sepsis[[Feat]]))
+  colnames(df3) <- c("X1m_read", "Feat")
+  
+  b <- ggplot(df3, aes(df3$Feat)) + geom_histogram(breaks = seq(min_hist, max_hist , by = by_val), fill = "lightblue")+ 
+                                                                        labs (x = "Feature Value", y = " ", title = "Feature Histogram") +
+                                                                        theme(text = element_text(size = 10), legend.title = element_blank(),
+                                                                              plot.title = element_text(size = 14),
+                                                                              axis.title.x = element_text(size = 10), 
+                                                                              axis.title.y = element_text(size = 10))
+
+  return(b)
+}
+
+
+## Probability plot for binary LR features 
+
+prob_plot_bin <- function(Feat) {
+  df3 <- cbind(data.frame(data.sepsis[["X1m_read"]]), data.frame(data.sepsis[[Feat]]))
+  colnames(df3) <- c("X1m_read", "Feat")
+  
+  plot_data <- df3 %>%
+  count(X1m_read, Feat) %>%
+  group_by(Feat) %>%
+  mutate(percent = n/sum(n))
+
+  a <- ggplot(plot_data, aes(x = Feat, y = percent, fill = factor(X1m_read, labels = c("Not Readmitted", "Readmitted")))) +
+    geom_bar(stat='identity') +
+    labs (x = "Feature Value", y = "Probability", title = "Feature vs Probability of Readmission") +
+    theme(text = element_text(size = 10), legend.title = element_blank(), plot.title = element_text(size = 14),
+        axis.title.x = element_text(size = 10), axis.title.y = element_text(size = 10), legend.position = "bottom") +
+    scale_x_continuous(breaks=c(0, 1)) +
+    scale_fill_brewer(palette = "Paired")
+  
+  return(a)
+}
+
+
+
+### Frequency Chart for binary LR features
+
+chart_binary <- function(Feat) {
+  df3 <- cbind(data.frame(data.sepsis[["X1m_read"]]), data.frame(data.sepsis[[Feat]]))
+  colnames(df3) <- c("X1m_read", "Feat")
+  
+  plot_data <- df3 %>%
+  count(X1m_read, Feat) %>%
+  group_by(Feat) %>%
+  mutate(percent = n/sum(n))
+
+  plot_data$Feature <- ifelse(plot_data$Feat == 0, "No", "Yes")
+  plot_data$Readmission <- ifelse(plot_data$X1m_read == 0, "No", "Yes") 
+  table <- subset(plot_data, select = c("Feature", "Readmission", "n"))
+  colnames(table) <- c("Feature", "Readmission", "Number of Encounters")
+
+  t <- knitr::kable(table)
+  return(t)
+}
+```
+
+
+About
+=======================================================================
+
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Project Overview   
+\n 
+
+Sepsis is a life threatening organ dysfunction caused by a dysregulated host response to infection. According to the Journal of the American Medical Association (JAMA), organ dysfunction can be identified as an acute change in total Sequential (Sepsis-Related) Organ Failure Assessment Score (SOFA) score of 2 points consequent to the infection. Furthermore, according to JAMA, a change in SOFA score of 2 points reflects an overall mortality risk of approximately 10% in a general hospital population with suspected infection. The Third International Consensus Definitions for Sepsis and Septic Shock (Sepsis-3) was published on JAMA in February 2016.
+
+Sepsis is a leading cause of death and high cost to patients, hospitals, and insurers. Although research studies have been conducted, and ideal protocol changes to inpatient treatment have been published, the readmission rate and costs associated with sepsis are still increasing. While sepsis can form outside of the treatment center or hospital, there are still a significant number of cases, especially involving individuals older than 65, documenting the development of sepsis for inpatients. By working with our medical sponsor and adviser Philip A Verhoef, we were able to obtain a de-classified clinical dataset that contains a wealth of variables related to patients who have:    
+
+Become septic while inpatient 
+
+A long-term, non-chronic condition (asthma, allergies, inflammatory disease) 
+
+Been admitted to the Chicago hospital system throughout 2006 to present day
+
+Given this dataset and the aforementioned cost related to sepsis, we turned our focus to how we can predict readmission of a patient who has experienced sepsis, and what these key predictors for readmission are. If we are successful in answering either of these questions using the dataset, we can then have a wider discussion with the medical community about how to prevent readmission after sepsis.
+
+### Data Compression and Feature Engineering   
+
+**Data Compression**
+
+The raw data given to us was a 29 GB file, containing over 35 million rows of de-classified clinical data from a certain hospital in the Chicago area. The large dataset is due to every row being a recorded value by a physician or clinician; for example, if a nurse came in and took a patient's temperature once every 6 hours for 4 times, this would appear as 4 different rows in the dataset.
+
+We took the following approach to make the dataset more manageable:
+
+1. For privacy, encrypt all time variables, and delete all PII and PHI from the raw dataset.
+
+2. Determine the variable type for each column, then categorize them as Control/Constant, Demographic, Lab Test, Scale/Score, Drug and Dosage Information, Location/Mobility, or Device/Imaging Results.
+
+3. Figure out the most simplistic metric for each category in step 2 and also determine the most logical type of summary (average, max, or min) for each binary, categorical, and text field.
+
+4. After applying the simplification code, aggregate all rows by encounters. Every row should represent one encounter. Taking the example from above, the 4 rows of different temperatures would be rolled up into 1 row, with max, min and average temperatures for the entire encounter.
+
+5. Create a very wide dataset with the septic encounter, the most recent prior encounter, and whether or not readmission occurred later.
+
+6. Filter on Length of Stay (LOS) of 30 days or less to control for that variable.
+
+
+By following these steps, we were able to shrink the data size to about 205 MB, with our final dataset being at 52,210 rows.
+
+
+**Feature Engineering**
+
+All potential features needed to be converted or transformed to numerical fields in order to be used in the final model. The following approaches were used to feature engineer the fields:
+
+* Converting categorical features into numerical features - Categorical features were isolated, and determined if they would be converted into binary or ordinal variables, or aggregated into rankings or groupings.
+
+* Outliers and threshold handling - We performed various data quality checks with our medical advisor to make sure outliers made sense, and filtered out rows which appeared to have data entry issues and contained values outside of reasonable thresholds.
+
+* Normalizing - Some features had extremely high variance, such as drip dosage or a few lab test results, which required normalization in order to avoid an overly high influence in our models.
+
+* N/A handling and testing - Given the large number of missing values in the raw dataset, there had to be specific NA handling for different columns, since 0s can mean many different things in lab tests or dosage administered and could potentially skew our model. Some NAs were replaced with 0s or average values where appropriate.
+
+### Feature Selection and Evaluation   
+
+We met with our research partner Phil many times to review the features that were associated with readmissions.  We calculated AUC scores for each variable independently and ranked them by how well they discriminated between patients who were readmitted or not.  Our first review revealed that we had a major problem: patients who die aren't readmitted and we were including them in the analysis.  Once we filtered them out, we saw variables that made more sense, like the elixhauser comorbidity score.  Since this variable was designed as a metric for disease burden, it's not surprising that higher scores were clearly related to higher rates of readmission.  
+
+With Phil's guidance, we eliminated features that didn't make sense as predictors for a variety of reasons.  Then, since we wanted a small set of fields to take in as user input, we created two independent models that resulted in about a dozen features each.  We used a "bottom-up" approach which added useful features one by one, and a "top-down" approach which started with all of the features and iteratively eliminated the least useful ones.  They both performed similarly and ended up with a handful of variables in common.  With very few exceptions, Phil liked the results from both models, so we combined all of the winning features into one model.
+
+We used a great scikit-learn tool in Python to boil down our final feature list called "Recursive Feature Elimination and Cross-Validation".  Basically, the algorithm starts with all of the features in our list and then iteratively trains the model, stores the average accuracy using cross-validation, ranks the features, and then drops the feature at the bottom of the list before starting the whole process again.  When all of the features have been dropped, it then outputs the list of the ones that resulted in the most accurate model.
+
+A quick cautionary tale about letting machines do all of the work and blindly maximizing accuracy:  As more features were added to our model, the accuracy would sometimes quickly rise as high as 80%.  This was the average accuracy calculated with 10-fold cross validation, but something didn't look right.  There was no buildup of accuracy as features we previously found to be useful are considered.  Most appeared suddenly worthless.  It turns out that since the dataset was filtered down to only those rows with values entered for all features, the prediction, while valid for a small subset of data, was not generalizable.  It was only making predictions for those patients who had all of the medical tests done.  Machines will optimize whatever you tell them to and will not typically know what your actual goal is, so we needed to be careful and deliberate when choosing our final features.  
+
+The features that ended up at the top of our list were the following:
+
+* Average Elixhauser Comorbidity Score
+* Max GCS Score
+* Max Chloride Given
+* Min MAP - Not Calculated
+* Average Creatinine C Score
+* Average SOFA Score
+* MAX INR
+* Sex
+* Ethnicity
+* Sum of Chest and Abdominal X-Rays without Contrast
+* Length of Stay
+* Benzodiazepin Administered
+* Antiviral Administered
+* Steroid Administered
+
+
+### Algorithm Development 
+\n
+
+Our initial goal was to use only a dozen features provided in the dataset to predict readmission after a septic encounter with a reasonable accuracy. Both the model and the features would be easy to interpret, and it wouldn't be a burden to manually enter the features into a system.
+
+However, we quickly realized that narrowing down hundreds of features to just a dozen sacrificed more predictive accuracy than we had hoped. So two separate algorithm development approaches were pursued: 
+
+**Approach 1 - Provide an interpretable algorithm and highlight the most important features** 
+
+Using a logistic regression, we were able to narrow our number features required for a prediction down to 14. Therefore, users could input the data manually and see the results of the prediction right away. The downside to this approach is the low accuracy (around 62%)
+
+**Approach 2 - Build the most accurate model possible using ensemble methods to demonstrate the predictive potential of the dataset**
+
+Using gradient boosting on entire dataset ended up giving us an 88% accuracy. However, there were so many variables involved that it would only be useful if our model were integrated into the database system directly.  
+
+
+|Algorithm Comparison   |Approach 1            |Approach 2           |
+|-----------------------|----------------------|---------------------|
+|Algorithm Selected     |Logistic Regression   |Gradient Boosting    |
+|Number of Features     |14                    |TBD                  |
+|Accuracy               |~62%                  |~85%                 |
+|Feature Engineering    |Not Applied           |Heavilly Applied     |
+
+
+
+
+Column
+----------------------------------------------------------------------
+
+### Elizabeth Chabot - Contributor 
+
+Elizabeth Chabot is currently completing her Masters of Data Science at the University of California, Berkeley, before attending CAL she completed her undergrad at the University of Southern California and received degrees in Psychology,  Neuroscience and Fine Arts. 
+
+Elizabeth stumbled upon Data Science while working in clinical research labs at Cedars Sinai. An interest in blending Computer Science, statistical learning and experimental design in healthcare/health-tech and biotech/pharma propelled Elizabeth to Genentech where she received an education in Data Science's role in the development of drugs and trials within a large corporation. 
+
+Elizabeth is excited and hopeful to apply the new practices and technologies she has learned from the program to improving health and decreasing disease.
+
+
+### Jay Cordes - Contributor
+
+Jay Cordes developed a keen interest in data science through assisting his former professor with writing his book "Proofs that Really Count: The Art of Combinatorial Proof". His professor challenged him by asking him to come up with unique approaches to problems by combining his knowledge in computer science and mathematics. 
+
+This experience made Jay realize that his passion is solving problems by combining mathematics, statistics, and computer science, all which are building blocks for data science. Jay is currently a student in the Masters of Information and Data Science (MIDS) program at UC Berkeley School of Information. From the program, Jay is hoping to expand his knowledge base and skill-set to more effectively advocate for and demostrate the value of data-driven decision-making. 
+
+
+
+### John Sullivan - Contributor
+
+John Sullivan became interested in data science after a few years doing Six Sigma and reporting when he realized that what he really wanted to do wasn't to manage other people doing work, or just report on what already existed, but to get hands on and be the one to solve data problems. Unfortunately the economics degrees he had provided him without the practical and technical skills he needed to do that in the real world (no, knowing Stata does not count as a practical skill). 
+
+After looking around he chose to attend the MIDS program at UC Berkeley to gain those skills. The program has greatly broadened his knowledge of the tools and techniques needed to be an effective practitioner of data science and advocate of evidenced based decisions
+
+
+### Yifan Sun - Contributor
+
+Yifan Sun first developed an interest for data through learning about personalized ads on Facebook. After researching and learning about data mining and analytics used in consumer segmentation, she became fascinated with data science because it can tell stories that oftentimes gets overlooked or masked by assumptions, baises, or noise. 
+
+Yifan is currently pursuing her Masters in Information and Data Science (MIDS) degree through UC Berkeley School of Information. Her interests include building big data architecture, application of data analytics and machine learning in the fields of catastrohpe resilience and environmental conservation, and the data science ethics. 
+
+
+### Philip Verhoef, MD, PhD, FAAP, FACP - Sponsor/Medical Adviser
+
+**Assistant Professor, Department of Medicine, University of Chicago**
+
+Philip Verhoef, MD, PhD, FAAP, FACP, is a physician-scientist interested in immune dysfunction in the intensive care unit (ICU), with a long-term objective to bring rigorous immunologic analysis to the care of critically ill patients.
+
+Dr. Verhoef is committed to improving patient care through research through basic, translational, informatic and clinical approaches. He is currently focusing his research on examining how type 2 (allergic) immunity plays a critical pro-resolving, anti-inflammatory role during acute infection
+
+
+
+Readmission Predictor Method 1 - Logistic Regression 
+=======================================================================
+
+Column {.sidebar}
+----------------------------------------------------------------------
+
+**Input Patient Information** 
+
+```{r}
+sliderInput("input1", "Average Comorbidity", 0, 20, 1)
+sliderInput("input2", "Maximum GCS Score", 0, 15, 15)
+sliderInput("input3", "Max Chloride Given (mmol)",75, 195, 105, 5)
+numericInput("input4", "Minimum MAP - Non Calculated (mmHg)", 55)
+numericInput("input5", "Average Creatinine", 0.5)
+numericInput("input6", "Average SOFA Score", 2.0)
+numericInput("input7", "Max INR", 0.5)
+numericInput("input8", "Total Number of Chest and Abdomin xRay (No Contrast)", 3)
+numericInput("input9", "Length of Stay (Days)", 3)
+checkboxInput("input10", "Benzodiazepine Administered", FALSE)
+checkboxInput("input11", "Steroid Administered", FALSE)
+checkboxInput("input12", "Antiviral Administered", FALSE)
+checkboxInput("input13", "Patient is Male", TRUE)
+checkboxInput("input14", "Patient is Hispanic", TRUE)
+```
+
+
+
+column {data-width=450}
+-----------------------------------------------------------------------
+
+### Prediction {data-height=200}
+
+```{r}
+
+LR = glm(X1m_read~., family = binomial(link = 'logit'), data = data.sepsis)
+
+  predLR <- reactive({
+  avgelix_comorb <- input$input1
+  maxgcs_score <- input$input2
+  maxchloride <- input$input3
+  minmap_notcalc <- input$input4
+  avgcreatinine <- input$input5
+  avgsofa_score <- input$input6
+  maxinr <- input$input7
+  sumchestab_wo_ct <- input$input8
+  los_day <- input$input9
+  maxbenzo_diaz <- input$input10
+  maxsteroid_ad <- input$input11
+  maxantiviral_ad <- input$input12
+  category_sex <- input$input13
+  category_ethnicity <- input$input14
+
+  predict(LR, 
+          newdata = data.frame(avgelix_comorb=avgelix_comorb, 
+                               maxbenzo_diaz=as.integer(as.logical(maxbenzo_diaz)), 
+                               maxgcs_score=maxgcs_score,
+                               avgcreatinine_c=avgcreatinine, 
+                               avgsofa_score=avgsofa_score,
+                               maxsteroid_ad=as.integer(as.logical(maxsteroid_ad)),
+                               maxinr=maxinr,
+                               maxchloride=maxchloride, 
+                               minmap_notcalc=minmap_notcalc,
+                               los_day=los_day,
+                               category_sex=as.integer(as.logical(category_sex)),
+                               category_ethnicity=as.integer(as.logical(category_ethnicity)),
+                               sumchestab_wo_ct=sumchestab_wo_ct,
+                               maxantiviral_ad=as.integer(as.logical(maxantiviral_ad))
+                               ), type = 'response')
+
+})
+
+pred1 <- renderText({ifelse(predLR() > 0.5, 
+                            "This patient is likely to get readmitted! Prediction logic based on if predicted probability of readmission is greater 50%, the patient is likely to get reamitted; otherwise prediction will return not likely. This prediction has a false positive rate of 16.39%", 
+                            "This patient is not likely to get readmitted. Prediction logic based on if predicted probability of readmission is greater 50%, the patient is likely to get reamitted; otherwise prediction will return not likely. This prediction has a false positive rate of 16.39%"
+                            )})
+
+pred1
+```
+ 
+
+### Data Dictionary
+
+|Feature  |Unit   |Meaning   |
+|:-------------|:------|:---------------------------------------------------------|
+|Average Elixhauser (Elix) Comorbidity Score  |N/A    |Number of qualified pre-existing conditions             |
+|Max GCS Score  |N/A    |GCS stands for Glasgow Coma Scale, which is used to describe the general level of conciousness in patients with head injury; generally the lower the score, the less concious the patient is. Min score is 3 and max score is 15           |
+|Max Chloride Given |mmol   |            |
+|Min MAP - Not Calculated |mmHg   |MAP stands for mean arterial pressure, this is the non calculated field. MAP measures the average pressure in a patient's arteries during one cardiac cycle. Normal should be \ge 65 mmHg          |
+|Average Creatinine C Score |N/A    |This score measures the patient's kidney function. Normal score for adult healthy females is 88-128 mL/min; and 97 mL/min for healthy males            |
+|Average SOFA Score |N/A    |Main score to track patient's status in the ICU; see main page for more details             |
+|Max INR  |N/A    |INR stands for International Normalized Ratio; measure the time it takes for blood to clot            |
+|Sex  |N/A    |Sex of the patient, 1 is male in the dataset              |
+|Ethnicity  |N/A    |Ethnicity of the patient, specifically in this model it represents if the patient is hispanic (=1) or not             |
+|Sum of Chest and Abdominal X-Ray without Contrast  |N/A    |   |
+|Length of Stay |Day    |Length of stay in the hospital              |
+|Benzodiazepin Administered |N/A    |If benzodiazepin was administered during the stay (yes = 1)               |
+|Antiviral Administered |N/A    |If antiviral was administered during the stay (yes = 1)             |
+|Steroid Administered |N/A    |If steroid was administered during the stay (yes = 1)   |
+
+
+
+
+Column {.tabset .tabset-fade data-width=550}
+-----------------------------------------------------------------------
+
+### Average Comorbidity
+
+```{r fig.align="center"}
+prob_plot_dis("avgelix_comorb")
+hist_plot("avgelix_comorb", 0, 20, 1)
+```
+
+### Max GCS Score
+
+```{r fig.align="center"}
+prob_plot_dis("maxgcs_score")
+hist_plot("maxgcs_score", 3, 16, 1)
+```
+
+### Max Chloride Administered 
+
+```{r fig.align="center"}
+prob_plot_dis("maxchloride")
+hist_plot("maxchloride", 80, 160, 2)
+```
+
+### Min MAP - Not Calculated 
+
+```{r fig.align="center"}
+prob_plot_dis("minmap_notcalc")
+hist_plot("minmap_notcalc", 0, 120, 5)
+```
+
+### Average Creatinine  
+
+```{r fig.align="center"}
+prob_plot_cont("avgcreatinine_c")
+hist_plot("avgcreatinine_c", 0, 3.1, 0.1)
+```
+
+### Average SOFA Score  
+
+```{r fig.align="center"}
+prob_plot_cont("avgsofa_score")
+hist_plot("avgsofa_score", 0, 16, 0.5)
+```
+
+### Max INR
+
+```{r fig.align="center"}
+prob_plot_cont("maxinr")
+hist_plot("maxinr", 0.5, 4, 0.1)
+```
+
+### Total Number of Chest and Abdomin xRay (No Contrast)
+
+```{r fig.align="center"}
+prob_plot_dis("sumchestab_wo_ct")
+hist_plot("sumchestab_wo_ct", 0, 3, 1)
+```
+
+### Benzodiazepines Taken/Administered (1 = Yes)
+
+```{r fig.align="center"}
+prob_plot_bin("maxbenzo_diaz")
+```
+```{r}
+chart_binary("maxbenzo_diaz")
+```
+
+### Steroids Taken/Administered (1 = Yes)
+
+```{r fig.align="center"}
+prob_plot_bin("maxsteroid_ad")
+```
+```{r}
+chart_binary("maxsteroid_ad")
+```
+
+### Antiviral Taken/Administered (1 = Yes)
+
+```{r fig.align="center"}
+prob_plot_bin("maxantiviral_ad")
+```
+```{r}
+chart_binary("maxantiviral_ad")
+```
+
+### Patient Sex (1 = Male)
+
+```{r fig.align="center"}
+prob_plot_bin("category_sex")
+```
+```{r}
+chart_binary("category_sex")
+```
+
+### Patient is Hispanic (1 = Yes)
+
+```{r fig.align="center"}
+prob_plot_bin("category_ethnicity")
+```
+```{r}
+chart_binary("category_ethnicity")
+```
+
+
+  
