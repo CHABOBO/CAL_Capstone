@@ -19,7 +19,7 @@ library(stringr)
 library(Matrix)
 
 # Load in dataset for LR 
-data.sepsis = read.csv("LRDataset.csv")
+data.sepsis = read.csv("LRdata.csv")
 data.sepsis$minmap_notcalc = as.integer(data.sepsis$minmap_notcalc)
 
 # Load in data for xgboost
@@ -233,9 +233,9 @@ Using gradient boosting on entire dataset ended up giving us an 88% accuracy. Ho
 |Algorithm Comparison   |Approach 1            |Approach 2           |
 |-----------------------|----------------------|---------------------|
 |Algorithm Selected     |Logistic Regression   |Gradient Boosting    |
-|Number of Features     |14                    |TBD                  |
-|Accuracy               |~62%                  |~85%                 |
-|Feature Engineering    |Not Applied           |Heavilly Applied     |
+|Number of Features     |14                    |131                  |
+|Accuracy               |~62%                  |~84%                 |
+|Feature Engineering    |Not Applied           |Heavily Applied     |
 
 
 
@@ -436,6 +436,13 @@ hist_plot("avgsofa_score", 0, 16, 0.5)
 ```{r fig.align="center"}
 prob_plot_cont("maxinr")
 hist_plot("maxinr", 0.5, 4, 0.1)
+```
+
+### Length of Stay (Day)
+
+```{r fig.align="center"}
+prob_plot_cont("los_day")
+hist_plot("los_day", 0, 200, 10)
 ```
 
 ### Total Number of Chest and Abdomin xRay (No Contrast)
