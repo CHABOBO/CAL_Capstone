@@ -1,0 +1,139 @@
+---
+title: "Sepsis Readmission Dashboard"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+---
+
+
+Readmission Predictor Method 2 - Ensemble Method
+======================================================================
+  
+  
+```{r, include=FALSE}
+rm(list=ls())
+library(xgboost)
+library(readr)
+library(stringr)
+require(Matrix)
+require(data.table)
+library(shiny)
+
+shiny.maxRequestSize=50*1024^2
+
+```
+
+```{r, include=FALSE}
+trainsetado = read.csv('trainsetado.csv')
+testsetado = read.csv('testsetado.csv')
+
+yo = trainsetado$X1m_read
+y_testo = testsetado$X1m_read
+sparse_matrixtwoo <- sparse.model.matrix(X1m_read~.-1, data = trainsetado)
+sparse_matrix_testtwoo <- sparse.model.matrix(X1m_read~.-1, data = testsetado)
+
+rm(trainsetado)
+
+bsta_deltao <- xgboost(data = sparse_matrixtwoo,label= yo, booster = "gbtree", eta = 0.1, max_depth = 15, alpha = 0.0001, gamma=1,  subsample = 1, colsample_bytree = 1, nrounds = 200,  max_delta_step = 1, objective = "binary:logistic", verbose = 2)
+
+rm(yo)
+rm(sparse_matrixtwoo)
+
+```
+
+
+
+
+Column {.sidebar}
+----------------------------------------------------------------------
+  
+**Input Patient Information** 
+  
+Test set includes 10,855 test patients. Please enter a number between 1 and 10,855 
+
+```{r}
+numericInput("input1", "Select Test Patient", 1)
+```
+
+Column
+----------------------------------------------------------------------
+  
+### Actual {data-height=250}
+  
+```{r}
+
+#actual
+
+actual <- reactive({
+  patient_input <- input$input1
+  
+  testsetado[patient_input, 1]
+})
+
+
+actual_outcome <- renderText({ifelse(actual() == 1, "This patient was actually readmitted. ", "This patient was actually not readmitted. ")})
+
+
+
+actual_outcome
+
+```
+
+
+### Prediction {data-height=250}
+
+```{r}
+#131 feature data
+
+predfull <- reactive({
+  patient_input <- input$input1
+  
+  predict(bsta_deltao, 
+          newdata = sparse.model.matrix(X1m_read~.-1, data = testsetado[patient_input, ]),
+          type = "response")
+})
+
+full_pred <- renderText({ifelse(predfull() > 0.5, "The model predicted this patient would be readmitted", "The model predicted this patient would not be readmitted")})
+
+full_pred
+```
+
+### Importance Matrix
+
+|Feature        |Gain   |Cover  |Frequency |
+|:--------------|:-----:|:-----:|:--------:|
+|maxdied_ever   |0.0555 |0.0481 |0.0014    |
+|sumelix_comorb |0.0296 |0.0289 |0.0160    |
+|los_by_day     |0.0196 |0.0097 |0.0057    |
+|maxend_of_life |0.0192 |0.0358 |0.0011    |
+|avgelix_comorb |0.0138 |0.0168 |0.0074    |
+
+Ensemble Model Overview
+------------------------------------------------------------------------------------
+
+### Overview of Extreme Gradient Boosting
+
+Gradient boosting is a machine learning technique for regression and classification problems. It utilizes an ensemble of weak prediction models, such as decision trees, to produce a stage-wise model for prediction. The model generalizes the ensemble of weaker models by allowing optimization for an arbitrary differentiable loss function. 
+
+[for more information on Extreme Gradient Boosting Models](https://blog.exploratory.io/introduction-to-extreme-gradient-boosting-in-exploratory-7bbec554ac7)
+
+
+|       |Features |Depth |NRounds |Booster  |Accuracy |Complexity |
+|:------|:--------|:-----|:-------|:--------|:--------|:----------|
+|Model1 |955      |150   |250     |'gbtree' |85%      |High       |
+|Model2 |590      |75    |200     |'gbtree' |84.5%    |Medium     |
+|Model3 |131      |15    |200     |'gbtree' |84%      |Low        |
+
+
+### Future Improvements
+
+This project, particularly the ensemble algorithm, served as a proof of concept for the types of prediction algorithms that hospitals can incorporate into their system. Realistically, collecting 131 features manually is an impossible task to any hospital professional, however if the algorithm could be connected and integrated into the Electric Health Records (EHRs) system in the hospital, then there could potentially be real-life usage and further development of the model. 
+
+Some further improvements that we could consider: 
+
+* Integrate the ensemble method directly into the Electric Hospital Records (EHRs) system 
+
+* Develop default logic to the model to further expand the algorithm to be able to predict readmission for patients that don't have all the data points 
+
+* The current model is calibrated on only 1 hospital. Having more than just one hospital data to calibrate the model would greatly improve its generalizability
