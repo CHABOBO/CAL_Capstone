@@ -1,0 +1,455 @@
+---
+title: "LogisticRegression"
+author: "Yifan Sun"
+date: "April 4, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(data.table)
+library(lmtest)
+library(caret)
+d1m3 <- read.csv('fulldataset.csv', header = T)
+
+d1m3$prior_enc = ifelse(d1m3$encounter_id_p1 != 0, 1, 0)
+names(d1m3)
+```
+
+
+```{r cars}
+
+features1 = c("avg_antibiotic","avgallphos_c","avgammonia","avgbun_c","avgcreatinine_c","avgdbp_c","avgelix_comorb","avgencount_enum","avgfio2_vent","avggastric_output","avggcs_score","avglos_total","avgmap_notcalc","avgni_fio2","avgo2sat_c","avgsofa_score","category_ethnicity","category_sex","countabdominal_assess","countcentral_line","countenc_eio","countIVF_meds","countmed_name","countroute","days_prior","lipase","los_b14day","los_b7day","los_by_day","maxabx_sum_2day","maxabx_sum_3day","maxabx_sum_4day","maxalt","maxantiarrhythmic_ad","maxanticoag_ad","maxantiviral_ad","maxavnodal_ad","maxbasophils","maxbenzo_diaz","maxcardiac_rhythm","maxchloride","maxcul_blood_ord","maxcul_other_ord","maxcul_stool_ord","maxcul_urine_ord","maxdiuretic_ad","maxekg_ecg","maxeosinophils","maxesr","maxfio2","maxfungal_ad","maxhr_c","maxhypogly_ad","maximmuno_ad","maxinr","maxIVF_meds","maxIVF_volume","maxlipase","maxlos","maxlymphocytes","maxmagnesium","maxmcv","maxmech_ventil","maxmetamyelocytes","maxmonocytes","maxmonth","maxmorse_ambaid","maxmorse_secdiag","maxneutrophils","maxnrbc","maxpaco2","maxpain_scale","maxpao2","maxpao2_sofa","maxph1819","maxphosphate","maxpotassium_c","maxptt","maxrdw","maxseason_y","maxsf_ratio","maxsf_ratio_old","maxsofa_bili","maxsofa_card","maxsofa_coag","maxsofa_cr","maxsteroid_ad","maxsvo2_4351","maxtemp_c","maxtemp_c_ecart","maxtotal_protein","maxurin_output","maxwound_output","prior_enc","mingcs_eye","mingcs_motor","mingcs_score_sofa","mingcs_verbal","minrass","minsofa_resp","race_asian.mideast.indian","race_black.african.american","race_more.than.one.race","sumchest_xray","sumchestab_wo_ct","sumekg_ecg","sumelix_comorb","sumfio2_final3_sofa","summob_lo","sumother_o2device","sumpao2_sofa", "target")
+
+dataset1 <- d1m3[features1]
+dataset1 <- dataset1[sample(nrow(dataset1)),]
+train1 <- dataset1[1:32601, ]  ##80%
+test1 <- dataset1[32602:40753, ]  ##20%
+
+##features1[!features1 %in% names(d1m3)]
+
+```
+
+```{r}
+
+## LR 1 using dataset 1 - Jay's List
+
+LR1 <- glm(target ~ ., family = binomial(link = 'logit'), data = train1)
+summary(LR1)
+## Extract features
+featuresest <- data.frame(t(data.frame(as.list(summary(LR1)$coefficients[,1]))))
+featuresp <- data.frame(t(data.frame(as.list(summary(LR1)$coefficients[,4]))))
+setDT(featuresest, keep.rownames = TRUE)[]
+setDT(featuresp, keep.rownames = TRUE)[]
+features1 <- merge(featuresest, featuresp)
+colnames(features1) <- c("feature", "estimate", "pvalue")
+
+write.csv(features1, file = "SigFeatures1.csv")
+
+## Run anova
+an1 <- anova(LR1, test = "Chisq")
+setDT(an1, keep.rownames = TRUE)[]
+colnames(an1) <- c("feature", "DF", "Deviance", "Resid. DF", "Resid. Dev", "Pr(>Chi)")
+
+write.csv(an1, file = "ANOVASigFeatures1.csv")
+
+
+## Predict 
+pred1 <- predict(LR1, newdata = test1, type = 'response')
+pred1 <- ifelse(pred1 > 0.5, 1, 0)
+missed1 <- mean(pred1 != test1$target)
+print(1-missed1)
+
+```
+
+```{r}
+features2 <- c("avgIVF_volume","avg_antibiotic","avgbmi","avgbraden_scale","avgdrip_phenylephrine","avgecart_score","avgesr","avgfio2_vent","avghb1200_p1","avgketones","avglipase_p1","avglos","avglos_total","avgmagnesium_p1","avgmap_notcalc","avgmetamyelocytes","avgmetamyelocytes_p1","avgmonocytes_p1","avgo2sat_c_p1","avgpotassium_c","avgpromyelocytes_p1","avgrdw","avgrr_c","avgsvo2_4351_p1","avgtemp_c","cancerdrug","category_ethnicity","countabdominal_assess_p1","hormone","location_er","location_ward","logsum_elix_comorb","los_by_day","los_day","los_day_p1","maxIVF_volume","maxage","maxantiarrhythmic_ad","maxantipsych_ad","maxantipsych_ad_p1","maxantiviral_ad_p1","maxbasophils_p1","maxbenzo_diaz","maxbraden_mobility_p1","maxcpap","maxcul_blood_ord_p1","maxcul_resp_p1","maxdrip_fentanyl","maxend_of_life","maxesr","maxfio2_vent","maxfirst_abx_day","maxfirst_abx_iv","maxgcs_eye_p1","maxhco3_art","maxhfnc","maxicd9_477_x","maxicd9_493_x_p1","maxicd9_691_x","maxicd9_691_x_p1","maximmuno_ad","maximmuno_ad_p1","maximmuno_flag","maxirb_drug","maxivbolus_nacl","maxketones","maxlipase","maxlipase_p1","maxlos","maxlos_p1","maxlvad","maxmap_notcalc","maxmetamyelocytes","maxmonocytes_p1","maxmorse_dateoffall","maxmorse_fallhistory_p1","maxother_o2device","maxph272_p1","maxpotassium_c","maxpromyelocytes_p1","maxseason_p1_y","maxsepsis_antibiotic_p1","maxsepsis_glucocorticoid","maxsepsis_glucocorticoid_p1","maxsf_ratio","maxsofa","maxsofa_card","maxsofa_gcs_p1","maxsteroid_ad_p1","maxsvo2_4351_p1","maxtemp_c_ecart_p1","maxtrach","maxtransffp","maxtreatment_limit","maxtroponin_flag","maxurin_cath","maxurin_output","min_los_total","minbasophils","minbraden_friction","minbraden_sensory","mindatamorse_secdiag","mingastric_output_p1","minhematocrit_p1","minlipase","minlipase_p1","minmagnesium","minmagnesium_p1","minmetamyelocytes","minmetamyelocytes_p1","minmonocytes_p1","minmorse_ambaid_p1","minmorse_dateoffall","minmorse_gaittransfer","minmorse_ivdevice","minmorse_ivdevice_p1","mino2_flow","minplatelet_count_c_p1","minrbc_p1","minrdw","minseason_p1_y","minsofa_resp","narcotic","other","race_asian.mideast.indian","race_black.african.american","race_more.than.one.race","race_white","sedative","steroid","sumchestab_wo_ct_p1","sumelix_comorb","prior_enc", "target")
+
+dataset2 <- d1m3[features2]
+dataset2 <- dataset2[sample(nrow(dataset2)),]
+
+train2 <- dataset2[1:32601, ]  ##80%
+test2 <- dataset2[32602:40753, ]  ##20%
+```
+
+```{r}
+
+## LR 2 using dataset 2 - Yifan's List
+
+LR2 <- glm(target ~ ., family = binomial(link = 'logit'), data = train2)
+summary(LR2)
+## Extract features
+featuresest <- data.frame(t(data.frame(as.list(summary(LR2)$coefficients[,1]))))
+featuresp <- data.frame(t(data.frame(as.list(summary(LR2)$coefficients[,4]))))
+setDT(featuresest, keep.rownames = TRUE)[]
+setDT(featuresp, keep.rownames = TRUE)[]
+features2 <- merge(featuresest, featuresp)
+colnames(features2) <- c("feature", "estimate", "pvalue")
+
+write.csv(features2, file = "SigFeatures2.csv")
+
+## Run anova
+an2 <- anova(LR2, test = "Chisq")
+setDT(an2, keep.rownames = TRUE)[]
+colnames(an2) <- c("feature", "DF", "Deviance", "Resid. DF", "Resid. Dev", "Pr(>Chi)")
+
+write.csv(an2, file = "ANOVASigFeatures2.csv")
+
+
+## Predict 
+pred2 <- predict(LR2, newdata = test2, type = 'response')
+pred2 <- ifelse(pred2 > 0.5, 1, 0)
+missed2 <- mean(pred2 != test2$target)
+print(1-missed2)
+
+```
+
+```{r}
+features3 <- c("avgelix_comorb","avgcreatinine_c","avglos_total","avgencount_enum","maximmuno_ad","avggcs_score","days_prior","mingcs_eye","maxlos","avgammonia","category_sex","maxIVF_volume","maxneutrophils","los_by_day","avgo2sat_c","maxsofa_coag","countenc_eio", "target")
+
+dataset3 <- d1m3[features3]
+dataset3 <- dataset3[sample(nrow(dataset3)),]
+train3 <- dataset3[1:32601, ]  ##80%
+test3 <- dataset3[32602:40753, ]  ##20%
+```
+
+
+```{r}
+
+## LR 3 using dataset 3 - ANOVA variables, Jay
+
+LR3 <- glm(target ~ ., family = binomial(link = 'logit'), data = train3)
+summary(LR3)
+## Extract features
+featuresest <- data.frame(t(data.frame(as.list(summary(LR3)$coefficients[,1]))))
+featuresp <- data.frame(t(data.frame(as.list(summary(LR3)$coefficients[,4]))))
+setDT(featuresest, keep.rownames = TRUE)[]
+setDT(featuresp, keep.rownames = TRUE)[]
+features3 <- merge(featuresest, featuresp)
+colnames(features3) <- c("feature", "estimate", "pvalue")
+
+write.csv(features3, file = "SigFeatures3.csv")
+
+## Run anova
+an3 <- anova(LR3, test = "Chisq")
+setDT(an3, keep.rownames = TRUE)[]
+colnames(an3) <- c("feature", "DF", "Deviance", "Resid. DF", "Resid. Dev", "Pr(>Chi)")
+
+write.csv(an3, file = "ANOVASigFeatures3.csv")
+
+
+## Predict 
+pred3 <- predict(LR3, newdata = test3, type = 'response')
+pred3 <- ifelse(pred3 > 0.5, 1, 0)
+missed3 <- mean(pred3 != test3$target)
+print(1-missed3)
+
+```
+
+```{r}
+features4 <- c("avgpotassium_c","avgrr_c","avgtemp_c","maxpotassium_c","maxicd9_477_x","maxicd9_691_x","maxantiarrhythmic_ad","maxantipsych_ad","maximmuno_ad","maxlvad","maximmuno_flag","maxtroponin_flag","mindatamorse_secdiag","avglos_total","min_los_total","race_asian.mideast.indian","race_black.african.american","maxcpap","los_by_day","los_day","maxfirst_abx_day","maxbenzo_diaz","maxother_o2device","minmorse_ivdevice","race_more.than.one.race","maxtrach","maxivbolus_nacl","avgrdw","minrdw","location_er","minmorse_gaittransfer","other","avgketones","avgmetamyelocytes","maxketones","maxmetamyelocytes","minmetamyelocytes","maxsofa","maxend_of_life","maxtransffp","maxage","avg_antibiotic","narcotic","maxsepsis_glucocorticoid","steroid","maxsf_ratio","maxtreatment_limit","maxfirst_abx_iv","avgmap_notcalc","maxmap_notcalc","avgbraden_scale","maxmorse_dateoffall","minmorse_dateoffall","minbasophils","avgIVF_volume","maxIVF_volume","avgbmi","maxhfnc","prior_enc","avgdrip_phenylephrine","hormone","avgfio2_vent","maxfio2_vent","minbraden_friction","avglos","maxlos","mino2_flow","logsum_elix_comorb","sumelix_comorb","location_ward","maxsofa_card","avgecart_score","maxhco3_art","minbraden_sensory","maxlipase","minlipase","minsofa_resp","avgesr","maxesr","race_white","maxurin_cath","category_ethnicity","cancerdrug","maxirb_drug","minmagnesium","maxurin_output","sedative","maxdrip_fentanyl", "target")
+
+dataset4 <- d1m3[features4]
+dataset4 <- dataset4[sample(nrow(dataset4)),]
+train4 <- dataset4[1:32601, ]  ##80%
+test4 <- dataset4[32602:40753, ]  ##20%
+```
+
+```{r}
+
+## LR 4 using dataset 4 - No other prior feature, just prior binary
+
+LR4 <- glm(target ~ ., family = binomial(link = 'logit'), data = train4)
+summary(LR4)
+## Extract features
+featuresest <- data.frame(t(data.frame(as.list(summary(LR4)$coefficients[,1]))))
+featuresp <- data.frame(t(data.frame(as.list(summary(LR4)$coefficients[,4]))))
+setDT(featuresest, keep.rownames = TRUE)[]
+setDT(featuresp, keep.rownames = TRUE)[]
+features4 <- merge(featuresest, featuresp)
+colnames(features4) <- c("feature", "estimate", "pvalue")
+
+write.csv(features4, file = "SigFeatures4.csv")
+
+## Run anova
+an4 <- anova(LR4, test = "Chisq")
+setDT(an4, keep.rownames = TRUE)[]
+colnames(an4) <- c("feature", "DF", "Deviance", "Resid. DF", "Resid. Dev", "Pr(>Chi)")
+
+write.csv(an4, file = "ANOVASigFeatures4.csv")
+
+
+## Predict 
+pred4 <- predict(LR4, newdata = test4, type = 'response')
+pred4 <- ifelse(pred4 > 0.5, 1, 0)
+missed4 <- mean(pred4 != test4$target)
+print(1-missed4)
+
+```
+
+```{r}
+features5 <- c("maxend_of_life","logsum_elix_comorb","maximmuno_flag","maxicd9_477_x","prior_enc","maxlvad","maxtreatment_limit","maxfirst_abx_iv","race_black.african.american","location_er","avglos_total","minmorse_ivdevice","avgecart_score","avgrr_c","maxpotassium_c","los_day","avgbraden_scale","los_by_day","minmorse_gaittransfer","narcotic","steroid","maxage","cancerdrug","maxcpap","location_ward","maxicd9_691_x", "target")
+
+dataset5 <- d1m3[features5]
+dataset5 <- dataset5[sample(nrow(dataset5)),]
+train5 <- dataset5[1:32601, ]  ##80%
+test5 <- dataset5[32602:40753, ]  ##20%
+```
+
+```{r}
+
+## LR 5 using dataset 5 - ANOVA list from dataset 4
+
+LR5 <- glm(target ~ ., family = binomial(link = 'logit'), data = train5)
+summary(LR5)
+## Extract features
+featuresest <- data.frame(t(data.frame(as.list(summary(LR5)$coefficients[,1]))))
+featuresp <- data.frame(t(data.frame(as.list(summary(LR5)$coefficients[,4]))))
+setDT(featuresest, keep.rownames = TRUE)[]
+setDT(featuresp, keep.rownames = TRUE)[]
+features5 <- merge(featuresest, featuresp)
+colnames(features5) <- c("feature", "estimate", "pvalue")
+
+write.csv(features5, file = "SigFeatures5.csv")
+
+## Run anova
+an5 <- anova(LR5, test = "Chisq")
+setDT(an5, keep.rownames = TRUE)[]
+colnames(an5) <- c("feature", "DF", "Deviance", "Resid. DF", "Resid. Dev", "Pr(>Chi)")
+
+write.csv(an5, file = "ANOVASigFeatures5.csv")
+
+
+## Predict 
+pred5 <- predict(LR5, newdata = test5, type = 'response')
+pred5 <- ifelse(pred5 > 0.5, 1, 0)
+missed5 <- mean(pred5 != test5$target)
+print(1-missed5)
+
+```
+
+
+
+```{r}
+
+## using csv 6
+
+d1m3 <- read.csv('aliveandlos30.csv', header = T)
+d1m3$prior_enc = ifelse(is.na(d1m3$encounter_id_p1), 0, 1)
+features6 <- c("avgelix_comorb","avgcreatinine_c","avglos_total","avgencount_enum","maximmuno_ad","avggcs_score","days_prior","mingcs_eye","maxlos","avgammonia","category_sex","maxIVF_volume","maxneutrophils","los_by_day","avgo2sat_c","maxsofa_coag","countenc_eio", "target")
+
+dataset6 <- d1m3[features6]
+#names(d1m3)
+#features6[!features6 %in% names(d1m3)]
+
+dataset6 <- dataset6[rowSums(is.na(dataset6)) == 0,]
+
+dataset6 <- dataset6[sample(nrow(dataset6)),]
+train6 <- dataset6[1:4380, ]  ##80%
+test6 <- dataset6[4381:5474, ]  ##20%
+
+```
+
+```{r}
+
+## LR 5 using dataset 5 - ANOVA list from dataset 4
+
+LR6 <- glm(target ~ ., family = binomial(link = 'logit'), data = train6)
+summary(LR6)
+## Extract features
+featuresest <- data.frame(t(data.frame(as.list(summary(LR6)$coefficients[,1]))))
+featuresp <- data.frame(t(data.frame(as.list(summary(LR6)$coefficients[,4]))))
+setDT(featuresest, keep.rownames = TRUE)[]
+setDT(featuresp, keep.rownames = TRUE)[]
+features6 <- merge(featuresest, featuresp)
+colnames(features6) <- c("feature", "estimate", "pvalue")
+
+write.csv(features5, file = "SigFeatures5.csv")
+
+## Run anova
+an6 <- anova(LR6, test = "Chisq")
+setDT(an6, keep.rownames = TRUE)[]
+colnames(an6) <- c("feature", "DF", "Deviance", "Resid. DF", "Resid. Dev", "Pr(>Chi)")
+
+write.csv(an5, file = "ANOVASigFeatures5.csv")
+
+
+## Predict 
+pred6 <- predict(LR6, newdata = test6, type = 'response')
+pred6 <- ifelse(pred6 > 0.5, 1, 0)
+missed6 <- mean(pred6 != test6$target)
+print(1-missed6)
+
+```
+
+```{r}
+
+feature7 <- c("avg_antibiotic","avgalkphos_c","avgallphos_c","avgbun_c","avgcreatinine_c","avgdbp_c","avgdrip_dobutamine","avgdrip_midazolam","avgdrip_milrinone","avgdrip_phenylephrine","avgdrip_propofol","avghb1198","avgmeds_per_day","avgmetamyelocytes","avgo2sat_c","avgsf_ratio","avgsf_ratio_old","avgsofa_score","category_ethnicity","category_sex","countabdominal_assess","countcentral_line","countenc_eio","countIVF_meds","countloc_cat","countmed_name","countroute","days_prior","race_black.african.american","lipase","loc_cat","logsum_elix_comorb","los_day","maxabx_sum_4day","maxalt","maxanticoag_ad","maxantiviral_ad","maxavnodal_ad","maxbenzo_diaz","maxcardiac_rhythm","maxchloride","maxcul_blood_ord","maxcul_other_ord","maxcul_stool_ord","maxcul_urine_ord","maxdiuretic_ad","maxekg_ecg","maxeosinophils","maxfio2","maxfungal_ad","maxgcs_motor","maxgcs_score","maxhypogly_ad","maxinr","maxIVF_meds","maxketones","maxlipase","maxlos","maxlos_total","maxlymphocytes","maxmap_notcalc","maxmcv","maxmonocytes","maxmonth","maxmorse_ambaid","maxmorse_secdiag","maxnrbc","maxpain_scale","maxph1819","maxphosphate","maxpotassium_c","maxptt","maxrdw","maxseason_y","maxsofa_bili","maxsofa_card","maxsofa_coag","maxsofa_cr","maxsteroid_ad","maxtemp_c","maxtemp_c_ecart","maxtotal_protein","maxurin_output","maxwound_output","minbasophils","mingastric_output","mingcs_eye","mingcs_score_sofa","mingcs_verbal","minlipase","minrass","minsofa_resp","race_more.than.one.race","sofa_taken","sumchest_xray","sumchestab_wo_ct","sumelix_comorb","sumfio2_final3_sofa","summob_lo","sumpao2_sofa", 'prior_enc', 'target')
+
+dataset7 <- d1m3[feature7]
+
+sapply(X = dataset7, FUN = function(x) sum(is.na(x)))
+dataset7 = dataset7[, colSums(is.na(dataset7)) == 0]
+
+dataset7 <- dataset7[sample(nrow(dataset7)),]
+train7 <- dataset7[1:32601, ]  ##80%
+test7 <- dataset7[32602:40753, ]  ##20%
+```
+
+```{r}
+
+## LR 7 using dataset 7 - Jay's list, no NAs
+
+LR7 <- glm(target ~ ., family = binomial(link = 'logit'), data = train7)
+summary(LR7)
+## Extract features
+featuresest <- data.frame(t(data.frame(as.list(summary(LR7)$coefficients[,1]))))
+featuresp <- data.frame(t(data.frame(as.list(summary(LR7)$coefficients[,4]))))
+setDT(featuresest, keep.rownames = TRUE)[]
+setDT(featuresp, keep.rownames = TRUE)[]
+features7 <- merge(featuresest, featuresp)
+colnames(features7) <- c("feature", "estimate", "pvalue")
+
+write.csv(features7, file = "SigFeatures7.csv")
+
+## Run anova
+an7 <- anova(LR7, test = "Chisq")
+setDT(an7, keep.rownames = TRUE)[]
+colnames(an7) <- c("feature", "DF", "Deviance", "Resid. DF", "Resid. Dev", "Pr(>Chi)")
+
+write.csv(an7, file = "ANOVASigFeatures7.csv")
+
+
+## Predict 
+pred7 <- predict(LR7, newdata = test7, type = 'response')
+pred7 <- ifelse(pred7 > 0.5, 1, 0)
+missed7 <- mean(pred7 != test7$target)
+print(1-missed7)
+
+```
+
+```{r}
+features8 <- c("logsum_elix_comorb","avgcreatinine_c","maxgcs_motor","los_day","countenc_eio","countcentral_line","maxgcs_score","avgo2sat_c","category_sex","countabdominal_assess","category_ethnicity","maxpain_scale","race_more.than.one.race","sumchestab_wo_ct","avgmeds_per_day","maxantiviral_ad","mingcs_eye","maxdiuretic_ad","maxcardiac_rhythm", "target")
+
+dataset8 <- d1m3[features8]
+
+train8 <- dataset8[1:32601, ]  ##80%
+test8 <- dataset8[32602:40753, ]  ##20% 
+```
+
+```{r}
+
+## LR 7 using dataset 7 - Jay's anova list, no NAs
+
+LR8 <- glm(target ~ ., family = binomial(link = 'logit'), data = train8)
+summary(LR8)
+## Extract features
+featuresest <- data.frame(t(data.frame(as.list(summary(LR8)$coefficients[,1]))))
+featuresp <- data.frame(t(data.frame(as.list(summary(LR8)$coefficients[,4]))))
+setDT(featuresest, keep.rownames = TRUE)[]
+setDT(featuresp, keep.rownames = TRUE)[]
+features8 <- merge(featuresest, featuresp)
+colnames(features8) <- c("feature", "estimate", "pvalue")
+
+write.csv(features8, file = "SigFeatures8.csv")
+
+## Run anova
+#an7 <- anova(LR7, test = "Chisq")
+#setDT(an7, keep.rownames = TRUE)[]
+#colnames(an7) <- c("feature", "DF", "Deviance", "Resid. DF", "Resid. Dev", "Pr(>Chi)")
+
+#write.csv(an7, file = "C:/Users/ysun1/Documents/MIDS Spring 2018/ANOVASigFeatures7.csv")
+
+
+## Predict 
+pred8 <- predict(LR8, newdata = test8, type = 'response')
+pred8 <- ifelse(pred8 > 0.5, 1, 0)
+missed8 <- mean(pred8 != test8$target)
+print(1-missed8)
+```
+
+
+```{r}
+
+dataset9 <- read.csv('tinyset2.csv', header = T)
+
+train9 <- dataset9[1:13618, ]  ##80%
+test9 <- dataset9[13619:17022, ]  ##20% 
+
+LR9 = glm(X1m_read~., family = binomial(link = 'logit'), data = train9)
+summary(LR9)
+
+
+pred9 <- predict(LR9, newdata = test9, type = 'response')
+pred9 <- ifelse(pred9 > 0.5, 1, 0)
+missed9 <- mean(pred9 != test9$X1m_read)
+print(1-missed9)
+
+```
+
+```{r}
+dataset10 <- read.csv('tinyset3.csv', header = T)
+
+train10 <- dataset10[1:13618, ]  ##80%
+test10 <- dataset10[13619:17022, ]  ##20% 
+
+LR10 = glm(X1m_read~., family = binomial(link = 'logit'), data = train10)
+summary(LR10)
+
+
+pred10 <- predict(LR10, newdata = test10, type = 'response')
+pred10 <- ifelse(pred10 > 0.5, 1, 0)
+missed10 <- mean(pred10 != test10$X1m_read)
+print(1-missed10)
+
+
+```
+```{r}
+dataset11 <- read.csv('tinyset4.csv', header = T)
+
+train11 <- dataset11[1:13618, ]  ##80%
+test11 <- dataset11[13619:17022, ]  ##20% 
+
+LR11 = glm(X1m_read~., family = binomial(link = 'logit'), data = train11)
+summary(LR11)
+
+
+pred11 <- predict(LR11, newdata = test11, type = 'response')
+pred11 <- ifelse(pred11 > 0.5, 1, 0)
+missed11 <- mean(pred11 != test11$X1m_read)
+print(1-missed11)
+
+```
+
+```{r}
+data.sepsis = read.csv("final_LR_set.csv")
+
+train = data.sepsis[1:26878, ]
+test = data.sepsis[26879:33597, ]
+
+LR = glm(X1m_read~., family = binomial(link = 'logit'), data = train)
+summary(LR)
+
+pred <- predict(LR, newdata = test, type = 'response')
+pred1 <- ifelse(pred > 0.5, 1, 0)
+missed <- mean(pred1 != test$X1m_read)
+print(1-missed)
+
+library(pROC)
+
+plot(roc(test$X1m_read, pred1, direction="<"), 
+     col = "lightblue", lwd=3)
+
+
+
+simple_roc <- function(labels, scores){
+  labels <- labels[order(scores, decreasing=TRUE)]
+  data.frame(TPR=cumsum(labels)/sum(labels), FPR=cumsum(!labels)/sum(!labels), labels)
+}
+
+roc_graph <- simple_roc(test$X1m_read == 1, pred1)
+with(roc_graph, points(1- FPR, TPR, col=1+labels))
+
+```
+
