@@ -19,7 +19,7 @@ library(stringr)
 library(Matrix)
 
 # Load in dataset for LR 
-data.sepsis = read.csv("https://www.dropbox.com/s/0ffl2f7lp92ovr6/final_LR_set.csv?raw=1")
+data.sepsis = read.csv("LRDataset.csv")
 data.sepsis$minmap_notcalc = as.integer(data.sepsis$minmap_notcalc)
 
 # Load in data for xgboost
