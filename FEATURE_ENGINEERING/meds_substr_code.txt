@@ -1,0 +1,25 @@
+
+
+MEDS CATEGORY
+
+a = enc_sep[enc_sep['concatmed_name_substr'].str.contains("AMPICIL|AZITHRO|AZTREON|CEFAZOL|CEFEPIM|CEFOXIT|CEFTAZI|CEFTRIA|CEPHALE|CIPROFL|CLINDAM|DAPTOMY|DOXYCYC|LEVOFLO|LINEZOL|MEROPEN|METRONI|PENICIL|PIPERAC|RIFAXIM|ERTAPEN|GENTAMI|MOXIFLO|TRIMETH|VANCOMY", na=False)]
+
+antiarrhythmic = a[['patient_id', 'encounter_id']]
+antiarrhythmic['antiarrhythmic'] = 1
+antiarrhythmic.to_csv("antiarrhythmic.csv", index = False) 
+
+
+
+ms = pd.read_csv("meds_substr.csv", dtype = "object") 
+ms.columns = ['num', 'med_str']
+ml = ms.med_str.str.cat(sep=",") 
+print(ml) 
+
+
+med_list = ml.split(',') 
+med_set = set(med_list)
+med_l = list(med_set)
+med_df = pd.DataFrame(med_l)
+med_df.to_csv("med_unique_substr.csv") 
+
+
